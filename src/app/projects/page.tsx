@@ -1,8 +1,16 @@
 "use client";
 
 import { useProjects } from "@/hooks/useProjects";
+import { useJira } from "@/context/JiraContext";
+import { useSprintIssues, useBurndownData } from "@/hooks/useSprintData";
+import { calculateHealthScore } from "@/lib/health-score";
 import Link from "next/link";
-import { Plus, FolderOpen, ChevronRight } from "lucide-react";
+import {
+  Plus,
+  FolderOpen,
+  ChevronRight,
+  CalendarDays,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -16,8 +24,28 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   synced: { label: "Synced to Jira", color: "bg-emerald-100 text-emerald-800" },
 };
 
+const healthColors: Record<string, { bg: string; text: string; ring: string }> = {
+  healthy: { bg: "bg-green-50", text: "text-green-700", ring: "ring-green-500" },
+  "at-risk": { bg: "bg-yellow-50", text: "text-yellow-700", ring: "ring-yellow-500" },
+  critical: { bg: "bg-red-50", text: "text-red-700", ring: "ring-red-500" },
+};
+
 export default function ProjectsPage() {
   const { projects, isLoaded } = useProjects();
+  const { activeSprint, selectedSprintId } = useJira();
+  const { data: issues } = useSprintIssues(selectedSprintId);
+  const { data: burndown } = useBurndownData(selectedSprintId);
+
+  const totalPoints = issues?.reduce((s, i) => s + i.storyPoints, 0) || 0;
+  const completedPoints =
+    issues
+      ?.filter((i) => i.statusCategory === "Done")
+      .reduce((s, i) => s + i.storyPoints, 0) || 0;
+
+  const health =
+    burndown && issues
+      ? calculateHealthScore(burndown, issues, totalPoints)
+      : null;
 
   if (!isLoaded) {
     return (
@@ -45,6 +73,7 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
+      {/* Project List */}
       {projects.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
           <FolderOpen className="mx-auto h-12 w-12 text-gray-300" />
@@ -75,36 +104,87 @@ export default function ProjectsPage() {
               (sum, e) => sum + e.stories.length,
               0
             );
+            const approvedCount = project.epics.filter(
+              (e) => e.status === "approved"
+            ).length;
+            const projectProgress =
+              epicCount > 0
+                ? Math.round((approvedCount / epicCount) * 100)
+                : 0;
             return (
               <Link
                 key={project.id}
                 href={`/projects/${project.id}`}
-                className="group flex items-center justify-between rounded-xl border border-gray-200 bg-white p-5 transition-all hover:border-blue-200 hover:shadow-md"
+                className="group block rounded-xl border border-gray-200 bg-white p-5 transition-all hover:border-blue-200 hover:shadow-md"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600">
-                      {project.name}
-                    </h3>
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        status.color
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600">
+                        {project.name}
+                      </h3>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                          status.color
+                        )}
+                      >
+                        {status.label}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
+                      <span>{epicCount} epic{epicCount !== 1 ? "s" : ""}</span>
+                      <span>{storyCount} stor{storyCount !== 1 ? "ies" : "y"}</span>
+                      {activeSprint && (
+                        <span className="flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {activeSprint.name}
+                        </span>
                       )}
-                    >
-                      {status.label}
-                    </span>
+                      <span>
+                        Created{" "}
+                        {new Date(project.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-center gap-4 text-sm text-gray-500">
-                    <span>{epicCount} epic{epicCount !== 1 ? "s" : ""}</span>
-                    <span>{storyCount} stor{storyCount !== 1 ? "ies" : "y"}</span>
-                    <span>
-                      Created{" "}
-                      {new Date(project.createdAt).toLocaleDateString()}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {health && (
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-xs font-semibold",
+                          healthColors[health.level]?.bg,
+                          healthColors[health.level]?.text
+                        )}
+                      >
+                        {health.score}%
+                      </span>
+                    )}
+                    <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-500" />
                   </div>
                 </div>
-                <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-500" />
+
+                {/* Project Health Bar */}
+                <div className="mt-3">
+                  <div className="mb-1 flex justify-between text-xs text-gray-400">
+                    <span>
+                      {approvedCount}/{epicCount} epics approved
+                    </span>
+                    <span>{projectProgress}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        projectProgress === 100
+                          ? "bg-green-500"
+                          : projectProgress > 0
+                            ? "bg-blue-500"
+                            : "bg-gray-300"
+                      )}
+                      style={{ width: `${projectProgress}%` }}
+                    />
+                  </div>
+                </div>
               </Link>
             );
           })}

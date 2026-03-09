@@ -10,6 +10,7 @@ interface EpicCardProps {
   epic: GeneratedEpic;
   onGenerateStories: (epicId: string) => Promise<void>;
   onStoryStatusChange?: (storyId: string, status: GeneratedStory["status"]) => void;
+  onEpicStatusChange?: (epicId: string, status: GeneratedEpic["status"]) => void;
 }
 
 const statusStyles: Record<string, string> = {
@@ -22,6 +23,7 @@ export default function EpicCard({
   epic,
   onGenerateStories,
   onStoryStatusChange,
+  onEpicStatusChange,
 }: EpicCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -98,6 +100,22 @@ export default function EpicCard({
             <span className="text-xs text-gray-400">
               {epic.stories.length} stories
             </span>
+          )}
+          {onEpicStatusChange && epic.status !== "approved" && (
+            <button
+              onClick={() => onEpicStatusChange(epic.id, "approved")}
+              className="rounded-md bg-green-50 px-2.5 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-100"
+            >
+              Approve Epic
+            </button>
+          )}
+          {onEpicStatusChange && epic.status !== "rejected" && (
+            <button
+              onClick={() => onEpicStatusChange(epic.id, "rejected")}
+              className="rounded-md bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100"
+            >
+              Reject Epic
+            </button>
           )}
         </div>
       </div>

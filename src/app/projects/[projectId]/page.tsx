@@ -6,7 +6,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { ArrowLeft, ClipboardCheck, Sparkles, Loader2 } from "lucide-react";
 import Link from "next/link";
 import EpicCard from "@/components/projects/EpicCard";
-import type { GeneratedStory } from "@/types";
+import type { GeneratedEpic, GeneratedStory } from "@/types";
 
 export default function ProjectDetailPage({
   params,
@@ -14,8 +14,14 @@ export default function ProjectDetailPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = use(params);
-  const { getProject, addStoriesToEpic, updateStoryStatus, isLoaded } =
-    useProjects();
+  const {
+    getProject,
+    addStoriesToEpic,
+    updateStoryStatus,
+    updateEpicStatus,
+    updateEpic,
+    isLoaded,
+  } = useProjects();
   const router = useRouter();
   const [generatingAll, setGeneratingAll] = useState(false);
 
@@ -64,6 +70,20 @@ export default function ProjectDetailPage({
       }
     } finally {
       setGeneratingAll(false);
+    }
+  };
+
+  const handleEpicStatusChange = (
+    epicId: string,
+    status: GeneratedEpic["status"]
+  ) => {
+    // Update epic and all its stories in a single state update
+    const epic = project.epics.find((e) => e.id === epicId);
+    if (epic) {
+      updateEpic(projectId, epicId, {
+        status,
+        stories: epic.stories.map((s) => ({ ...s, status })),
+      });
     }
   };
 
@@ -141,6 +161,7 @@ export default function ProjectDetailPage({
             onStoryStatusChange={(storyId, status) =>
               handleStoryStatusChange(epic.id, storyId, status)
             }
+            onEpicStatusChange={handleEpicStatusChange}
           />
         ))}
       </div>
